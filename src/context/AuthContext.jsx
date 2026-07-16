@@ -24,7 +24,9 @@ function friendlyAuthError(err) {
     "auth/user-not-found": "No account found with that email.",
     "auth/too-many-requests": "Too many attempts — please wait a moment and try again.",
     "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+    "auth/popup-blocked": "Your browser blocked the sign-in popup — allow popups for this site and try again.",
     "auth/network-request-failed": "Network error — check your connection and try again.",
+    "auth/unauthorized-domain": "This domain isn't yet approved for sign-in — add it under Firebase Console → Authentication → Settings → Authorized domains.",
   };
   return map[code] || "Something went wrong — please try again.";
 }
