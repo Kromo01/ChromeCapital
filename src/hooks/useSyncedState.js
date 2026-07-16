@@ -23,6 +23,11 @@ export function useSyncedState(storageKey, defaultValue) {
 
   const uid = firebaseReady ? user?.uid : null;
 
+  // Always-current snapshot the unmount-flush effect below can read without
+  // depending on it (avoids a stale closure over the state/uid from mount time).
+  const latestRef = useRef();
+  latestRef.current = { state, uid, storageKey };
+
   // Pull (or seed) cloud data whenever the signed-in user changes.
   useEffect(() => {
     if (!uid) {
@@ -66,6 +71,7 @@ export function useSyncedState(storageKey, defaultValue) {
     }
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
       setCloudStatus("syncing");
       saveCloudBlob(uid, storageKey, state)
         .then(() => setCloudStatus("synced"))
@@ -74,6 +80,20 @@ export function useSyncedState(storageKey, defaultValue) {
     return () => clearTimeout(saveTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, uid, cloudSynced, storageKey]);
+
+  // Flushes a still-pending debounced save the instant this component
+  // unmounts (e.g. navigating to another page). Without this, an edit made
+  // less than SAVE_DEBOUNCE_MS before leaving never reaches Firestore — the
+  // debounce's own cleanup just cancels it — and the next mount's cloud pull
+  // silently overwrites the correct local value with the stale cloud one.
+  useEffect(() => {
+    return () => {
+      if (!saveTimer.current) return;
+      clearTimeout(saveTimer.current);
+      const { state: latestState, uid: latestUid, storageKey: latestKey } = latestRef.current;
+      if (latestUid) saveCloudBlob(latestUid, latestKey, latestState).catch(() => {});
+    };
+  }, []);
 
   return [state, setState, cloudStatus];
 }

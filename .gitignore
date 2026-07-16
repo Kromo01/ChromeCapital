@@ -2,3 +2,14 @@ node_modules
 dist
 .env
 .env.local
+
+# Personal financial documents — must never be committed
+Bank statement.csv
+JAYDEN KROME Budget 2026.xlsx
+document.pdf
+
+# Stray scratch file, not part of the app
+compound-interest-calculator(1).jsx
+
+# Local Claude Code tooling config — not part of the app
+.claude/
