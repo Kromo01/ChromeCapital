@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   ComposedChart,
   Area,
@@ -399,11 +399,36 @@ function InvestmentCard({ investment, index, years, onChange, onRemove, canRemov
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
+const WORKING_STATE_KEY = "cc-investment-working-state";
+
 export default function CompoundInterestCalculator() {
   const idCounter = useRef(1);
-  const [investments, setInvestments] = useState([makeInvestment(1)]);
-  const [years, setYears] = useState(20);
-  const [todaysDollars, setTodaysDollars] = useState(false);
+
+  // The live, editable working state — synced so it survives navigating away
+  // and back, not just when explicitly saved as a named Scenario below.
+  const [workingState, setWorkingState, workingCloudStatus] = useSyncedState(WORKING_STATE_KEY, {
+    investments: [makeInvestment(1)],
+    years: 20,
+    todaysDollars: false,
+  });
+  const { investments, years, todaysDollars } = workingState;
+
+  const setField = (field) => (valueOrUpdater) => {
+    setWorkingState((prev) => ({
+      ...prev,
+      [field]: typeof valueOrUpdater === "function" ? valueOrUpdater(prev[field]) : valueOrUpdater,
+    }));
+  };
+  const setInvestments = setField("investments");
+  const setYears = setField("years");
+  const setTodaysDollars = setField("todaysDollars");
+
+  // Keeps the id counter ahead of whatever's loaded (local cache or cloud
+  // pull) so a freshly-added investment never collides with an existing id.
+  useEffect(() => {
+    const maxId = investments.reduce((m, inv) => Math.max(m, inv.id), 0);
+    idCounter.current = Math.max(idCounter.current, maxId);
+  }, [investments]);
 
   // Real holdings pulled from an imported investment statement PDF (Vanguard,
   // CommSec, SelfWealth, Pearler, Stake) — kept separate from the
@@ -488,9 +513,6 @@ export default function CompoundInterestCalculator() {
       setActiveScenarioId(id);
       setScenarioName(parsed.name);
       lastSavedSnapshotRef.current = JSON.stringify(parsed.data);
-
-      const maxId = parsed.data.investments.reduce((m, inv) => Math.max(m, inv.id), 0);
-      idCounter.current = Math.max(idCounter.current, maxId);
     } catch (e) {
       setScenarioError("Couldn't load that scenario.");
     } finally {
@@ -698,7 +720,7 @@ export default function CompoundInterestCalculator() {
             <h1 className="font-display text-xl md:text-2xl" style={{ color: COLORS.text }}>
               Compound Interest Calculator
             </h1>
-            <SyncStatusBadge status={scenarioCloudStatus} />
+            <SyncStatusBadge status={workingCloudStatus} />
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
