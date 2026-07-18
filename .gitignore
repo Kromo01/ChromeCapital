@@ -2,6 +2,10 @@ node_modules
 dist
 .env
 .env.local
+functions/node_modules
+functions/.env
+functions/.env.*
+!functions/.env.example
 
 # Personal financial documents — must never be committed
 Bank statement.csv
