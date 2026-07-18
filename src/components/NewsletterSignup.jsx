@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Mail, ArrowRight, Check } from "lucide-react";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { Mail, ArrowRight, Check, Loader2 } from "lucide-react";
+import { db, firebaseReady } from "../firebase.js";
 
 export default function NewsletterSignup({
   id = "newsletter",
@@ -8,21 +10,55 @@ export default function NewsletterSignup({
   subtitle = "One email, every fortnight. Investing, tax, and property — explained in plain English, with zero jargon.",
 }) {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | error | success
+  const [honeypot, setHoneypot] = useState("");
+  const [honeypotName] = useState(() => `${id}-hp-${Math.random().toString(36).slice(2, 8)}`);
+  const [status, setStatus] = useState("idle"); // idle | loading | error | success
   const [message, setMessage] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const trimmed = email.trim();
+
+    // Hidden field only a bot would fill in — silently "succeed" without writing anything.
+    if (honeypot) {
+      setStatus("success");
+      setMessage("You're on the list — check your inbox to confirm.");
+      setEmail("");
+      return;
+    }
+
+    const trimmed = email.trim().toLowerCase();
     const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
     if (!valid) {
       setStatus("error");
       setMessage("Enter a valid email address.");
       return;
     }
-    setStatus("success");
-    setMessage("You're on the list — check your inbox to confirm.");
-    setEmail("");
+
+    if (!firebaseReady) {
+      setStatus("error");
+      setMessage("Signups are temporarily unavailable. Please try again later.");
+      return;
+    }
+
+    setStatus("loading");
+    try {
+      await setDoc(
+        doc(db, "newsletterSubscribers", trimmed),
+        {
+          email: trimmed,
+          source: id,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      setStatus("success");
+      setMessage("You're on the list — check your inbox to confirm.");
+      setEmail("");
+    } catch (err) {
+      console.error("newsletter signup failed", err);
+      setStatus("error");
+      setMessage("Something went wrong. Please try again.");
+    }
   };
 
   return (
@@ -62,13 +98,36 @@ export default function NewsletterSignup({
               style={{ border: "1px solid #232C38", color: "#E9EDF2", background: "#0E141C" }}
               aria-invalid={status === "error"}
               aria-describedby={`${id}-status`}
+              disabled={status === "loading"}
+            />
+            {/* Hidden from real users and positioned off-screen (not just opacity:0) so
+                browser autofill/password managers don't mistake it for a real field —
+                "company"-style names get targeted by autofill heuristics even when hidden. */}
+            <input
+              type="text"
+              name={honeypotName}
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              style={{ position: "absolute", left: "-9999px", top: "-9999px", width: 1, height: 1, opacity: 0 }}
             />
             <button
               type="submit"
-              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02] flex-shrink-0"
+              disabled={status === "loading"}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02] flex-shrink-0 disabled:opacity-70 disabled:hover:scale-100"
               style={{ background: "#D4A94F", color: "#161006" }}
             >
-              Subscribe <ArrowRight size={15} />
+              {status === "loading" ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" /> Subscribing…
+                </>
+              ) : (
+                <>
+                  Subscribe <ArrowRight size={15} />
+                </>
+              )}
             </button>
           </form>
 
